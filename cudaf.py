@@ -281,7 +281,7 @@ def retrain_models_if_needed(tickers):
         print("모델을 재학습합니다...")
         for ticker in tickers:
             print(f"모델 학습 시작: {ticker}")
-            models[ticker] = train_transformer_model(ticker, epochs=50)  # 50 에포크로 학습
+            models[ticker] = train_transformer_model(ticker, epochs=10)  # 50 에포크로 학습
         last_trained_time = datetime.now()
         print(f"모델 학습 완료: {last_trained_time}")
 
