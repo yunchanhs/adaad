@@ -144,6 +144,29 @@ def get_atr(ticker, period=14):
 
     return df['ATR'].iloc[-1]  # 최신 ATR 값 반환
 
+def get_features(ticker):
+    """코인의 과거 데이터와 지표를 가져와 머신러닝에 적합한 피처 생성"""
+    df = pyupbit.get_ohlcv(ticker, interval="minute5", count=1000)
+
+    # MACD 및 Signal 계산
+    df['macd'], df['signal'] = get_macd(ticker)  # get_macd 함수 호출
+
+    # RSI 계산
+    df['rsi'] = get_rsi(ticker)  # get_rsi 함수 호출
+
+    # ADX 계산
+    df['adx'] = get_adx(ticker)  # get_adx 함수 호출
+
+    # ATR 계산
+    df['atr'] = get_atr(ticker)  # get_atr 함수 호출
+
+    df['return'] = df['close'].pct_change()  # 수익률
+    df['future_return'] = df['close'].shift(-1) / df['close'] - 1  # 미래 수익률
+
+    # NaN 값 제거
+    df.dropna(inplace=True)
+    return df
+
 # 거래 관련 함수 (생략, 기존 코드 동일)
 # get_balance, buy_crypto_currency, sell_crypto_currency
 
