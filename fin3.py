@@ -36,44 +36,6 @@ highest_prices = {}  # 최고가 기록용
 last_trained_time = None  # 마지막 학습 시간
 TRAINING_INTERVAL = timedelta(hours=8)  # 6시간마다 재학습
 
-# 예시: RandomForest 하이퍼파라미터 튜닝
-param_grid = {
-    'n_estimators': [100, 200, 300],
-    'max_depth': [10, 20, None],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 4],
-}
-
-rf = RandomForestClassifier()
-grid_search = GridSearchCV(rf, param_grid, cv=5)
-grid_search.fit(X_train, y_train)
-
-print("Best parameters:", grid_search.best_params_)
-
-# 예시: 확률적 예측과 불확실성 추정
-rf = RandomForestClassifier()
-clf = CalibratedClassifierCV(rf, method='sigmoid')
-clf.fit(X_train, y_train)
-
-# 예측 신뢰도 (확률)
-probabilities = clf.predict_proba(X_test)
-def get_upbit_data():
-    url = "https://api.upbit.com/v1/candles/minutes/5"
-    params = {
-        "market": "KRW-BTC",
-        "count": 200
-    }
-    response = requests.get(url, params=params)
-    return response.json()
-
-# 데이터 캐싱 (API 요청을 줄이기 위해)
-cache_data = None
-cache_time = time.time()
-
-if cache_data is None or time.time() - cache_time > 60:  # 1분마다 새로 요청
-    cache_data = get_upbit_data()
-    cache_time = time.time()
-    
 def get_top_tickers(n=10):
     """거래량 상위 n개 코인을 선택"""
     tickers = pyupbit.get_tickers(fiat="KRW")
