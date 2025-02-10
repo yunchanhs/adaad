@@ -16,7 +16,6 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-import talib
 
 # API 키 설정
 ACCESS_KEY = "J8iGqPwfjkX7Yg9bdzwFGkAZcTPU7rElXRozK7O4"
@@ -36,10 +35,6 @@ highest_prices = {}  # 최고가 기록용
 # 모델 학습 주기 관련 변수
 last_trained_time = None  # 마지막 학습 시간
 TRAINING_INTERVAL = timedelta(hours=8)  # 6시간마다 재학습
-
-# 데이터 스케일링 (예: 주가 데이터의 정규화)
-scaler = StandardScaler()
-data_scaled = scaler.fit_transform(data[['close']])
 
 # 예시: RandomForest 하이퍼파라미터 튜닝
 param_grid = {
