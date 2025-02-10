@@ -264,16 +264,7 @@ def detect_surge_tickers(threshold=0.03):
         except:
             continue
     return surge_tickers
-
-def fetch_top_coins_by_volume():
-    tickers = exchange.fetch_tickers()
-    volumes = [(symbol, data['quoteVolume']) for symbol, data in tickers.items() if '/USDT' in symbol]
-    top_coins = sorted(volumes, key=lambda x: x[1], reverse=True)[:10]  # 거래량 기준 상위 10개
-    return [coin[0] for coin in top_coins]
-
-top_coins = fetch_top_coins_by_volume()  # 상위 10개 코인 가져오기
-print("거래량 상위 10개 코인:", top_coins)
-
+    
 def should_sell(ticker, current_price):
     """트레일링 스탑 로직을 활용한 매도 판단"""
     if ticker not in entry_prices:
