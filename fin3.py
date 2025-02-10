@@ -353,7 +353,7 @@ if __name__ == "__main__":
                         models[ticker] = train_transformer_model(ticker, epochs=10)  # 급상승 코인은 빠르게 학습
             
             # 거래량 상위 10개 코인도 검사
-            for symbol in top_coins:
+            for symbol in top_tickers:
                 if symbol not in data:
                     continue
                     
