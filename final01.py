@@ -7,8 +7,6 @@ import torch.nn as nn
 from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
-from torch.utils.data import Dataset, DataLoader
-import torch.optim as optim
 
 # API 키 설정
 ACCESS_KEY = "J8iGqPwfjkX7Yg9bdzwFGkAZcTPU7rElXRozK7O4"
@@ -292,13 +290,29 @@ def train_transformer_model(ticker, epochs=30):
 def get_ml_signal(ticker, model):
     """AI 신호 계산"""
     try:
+        # 특징 데이터 가져오기
         features = get_features(ticker)
+
+        # 필요한 열만 추출하고, 마지막 30개 데이터 선택
         latest_data = features[['macd', 'signal', 'rsi', 'adx', 'atr', 'return']].tail(30)
-        X_latest = torch.tensor(latest_data.values, dtype=torch.float32).unsqueeze(0)
+        
+        # 데이터 정규화 (스케일링)
+        scaler = StandardScaler()
+        scaled_data = scaler.fit_transform(latest_data)
+
+        # 텐서로 변환 (모델에 입력, float64 사용)
+        X_latest = torch.tensor(scaled_data, dtype=torch.float64).unsqueeze(0)
+
+        # 모델 평가 모드로 전환
         model.eval()
+
+        # 예측 계산
         with torch.no_grad():
             prediction = model(X_latest).item()
+
+        # 예측값 반환
         return prediction
+
     except Exception as e:
         print(f"[{ticker}] AI 신호 계산 에러: {e}")
         return 0
