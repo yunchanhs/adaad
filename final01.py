@@ -7,7 +7,10 @@ import torch.nn as nn
 from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
+import datetime  # datetime 모듈을 import
+from torch.utils.data import Dataset
 
+now = datetime.datetime.now()  # datetime 클래스의 now() 메서드를 호출
 # API 키 설정
 ACCESS_KEY = "J8iGqPwfjkX7Yg9bdzwFGkAZcTPU7rElXRozK7O4"
 SECRET_KEY = "6MGxH2WjIftgQ85SLK1bcLxV4emYvrpbk6nYuqRN"
