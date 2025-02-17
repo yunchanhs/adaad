@@ -9,6 +9,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 import datetime  # datetime 모듈을 import
 from torch.utils.data import Dataset
+from torch.utils.data import DataLoader  # DataLoader 클래스를 임포트
+import torch.optim as optim
 
 now = datetime.datetime.now()  # datetime 클래스의 now() 메서드를 호출
 # API 키 설정
