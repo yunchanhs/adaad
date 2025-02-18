@@ -170,7 +170,7 @@ def get_features(ticker):
     df['atr'] = get_atr(ticker)  # get_atr 함수 호출
 
     df['return'] = df['close'].pct_change()  # 수익률
-    df['future_return'] = df['close'].shift(-1) / df['close'] - 1  # 미래 수익률
+    df['future_return'] = df['close'].shift(-3) / df['close'] - 1  # 3개 후 캔들 예측
 
     # NaN 값 제거
     df.dropna(inplace=True)
@@ -219,7 +219,7 @@ class TradingDataset(Dataset):
         y = self.data.iloc[idx + self.seq_len]['future_return']
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
 
-def train_transformer_model(ticker, epochs=30):
+def train_transformer_model(ticker, epochs=100):
     print(f"모델 학습 시작: {ticker}")
     data = get_features(ticker)
 
@@ -278,7 +278,7 @@ def get_ml_signal(ticker, model):
         features = get_features(ticker)
 
         # 필요한 열만 추출하고, 마지막 30개 데이터 선택
-        latest_data = features[['macd', 'signal', 'rsi', 'adx', 'atr', 'return']].tail(30)
+        latest_data = features[['macd', 'signal', 'rsi', 'adx', 'atr', 'return']].tail(20)
         
         # 데이터 정규화 (스케일링)
         scaler = StandardScaler()
