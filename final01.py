@@ -285,7 +285,7 @@ def get_ml_signal(ticker, model):
         scaled_data = scaler.fit_transform(latest_data)
 
         # 텐서로 변환 (모델에 입력, float64 사용)
-        X_latest = torch.tensor(scaled_data, dtype=torch.float64).unsqueeze(0)
+        X_latest = torch.tensor(scaled_data, dtype=torch.float32).unsqueeze(0)
 
         # 모델 평가 모드로 전환
         model.eval()
