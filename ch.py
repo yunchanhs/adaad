@@ -35,7 +35,7 @@ highest_prices = {}  # 매수 후 최고 가격 저장
 recent_trades = {}  # 최근 거래 기록
 recent_surge_tickers = {}  # 최근 급상승 감지 코인 저장
 
-def get_top_tickers(n=30):
+def get_top_tickers(n=3):
     """거래량 상위 n개 코인을 선택"""
     tickers = pyupbit.get_tickers(fiat="KRW")
     volumes = []
@@ -236,7 +236,7 @@ class TradingDataset(Dataset):
         y = self.data.iloc[idx + self.seq_len]['future_return']
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
 
-def train_transformer_model(ticker, epochs=100):
+def train_transformer_model(ticker, epochs=50):
     print(f"모델 학습 시작: {ticker}")
     input_dim = 6
     d_model = 64
@@ -340,7 +340,7 @@ if __name__ == "__main__":
     models = {}
 
     # 초기 설정
-    top_tickers = get_top_tickers(n=10)
+    top_tickers = get_top_tickers(n=3)
     print(f"거래량 상위 코인: {top_tickers}")
     models = {ticker: train_transformer_model(ticker) for ticker in top_tickers}
     recent_surge_tickers = {}  # 급상승 코인 저장
@@ -351,7 +351,7 @@ if __name__ == "__main__":
 
             # ✅ 1. 상위 코인 업데이트 (6시간마다)
             if now.hour % 6 == 0 and now.minute == 0:
-                top_tickers = get_top_tickers(n=30)
+                top_tickers = get_top_tickers(n=3)
                 print(f"[{now}] 상위 코인 업데이트: {top_tickers}")
 
                 # 새롭게 추가된 코인 모델 학습
