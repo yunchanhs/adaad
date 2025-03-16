@@ -67,16 +67,23 @@ def get_ohlcv_cached(ticker, interval="minute60"):
 class TransformerModel(nn.Module):
     def __init__(self, input_dim, d_model, num_heads, num_layers, output_dim):
         super(TransformerModel, self).__init__()
+
         self.embedding = nn.Linear(input_dim, d_model)
-        self.transformer = nn.Transformer(d_model, num_heads, num_layers, num_layers, batch_first=True)
-        self.fc_out = nn.Linear(d_model, output_dim)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=num_heads,
+            batch_first=True
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.fc = nn.Linear(d_model, output_dim)
+        self.activation = nn.Sigmoid()  # 🚀 0~1 범위로 제한
 
     def forward(self, x):
         x = self.embedding(x)
         x = self.encoder(x)
-        x = self.fc(x[:, -1, :])
-        return torch.sigmoid(x)  # 0~1 사이 값으로 변환
-
+        x = self.fc(x[:, -1, :])  
+        x = self.activation(x)  # ✅ sigmoid 적용
+        return x
 # 지표 계산 함수 (생략, 기존 코드 동일)
 # get_macd, get_rsi, get_adx, get_atr, get_features
 
