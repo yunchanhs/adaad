@@ -62,7 +62,7 @@ def detect_surge_tickers(threshold=0.03):
     return surge_tickers
 
 def get_ohlcv_cached(ticker, interval="minute60"):
-    time.sleep(0.2)  # 요청 간격 조절
+    time.sleep(0.5)  # 요청 간격 조절
     return pyupbit.get_ohlcv(ticker, interval=interval)
 
 # 지표 계산 함수 (생략, 기존 코드 동일)
