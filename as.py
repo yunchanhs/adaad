@@ -138,7 +138,7 @@ def get_atr(ticker, period=14):
 
 def get_features(ticker):
     """코인의 과거 데이터와 지표를 가져와 머신러닝에 적합한 피처 생성"""
-    df = pyupbit.get_ohlcv(ticker, interval="minute5", count=1000)
+    df = pyupbit.get_ohlcv(ticker, interval="minute5", count=5000)
 
     # MACD 및 Signal 계산
     df['macd'], df['signal'] = get_macd(ticker)  # get_macd 함수 호출
