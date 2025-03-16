@@ -243,7 +243,7 @@ def train_transformer_model(ticker, epochs=50):
         print(f"경고: {ticker}의 데이터셋이 너무 작아서 학습을 진행할 수 없음.")
         return None
         
-    criterion = nn.SmoothL1Loss()  # 더 안정적인 손실 함수 사용
+    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, epochs + 1):
