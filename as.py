@@ -64,20 +64,6 @@ def detect_surge_tickers(threshold=0.03):
 def get_ohlcv_cached(ticker, interval="minute60"):
     time.sleep(0.2)  # 요청 간격 조절
     return pyupbit.get_ohlcv(ticker, interval=interval)
-    
-class TransformerModel(nn.Module):
-    def __init__(self, input_dim, d_model, num_heads, num_layers, output_dim):
-        super(TransformerModel, self).__init__()
-        self.embedding = nn.Linear(input_dim, d_model)
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model, num_heads)
-        self.transformer = nn.TransformerEncoder(self.encoder_layer, num_layers)
-        self.fc_out = nn.Linear(d_model, output_dim)
-
-    def forward(self, x):
-        x = self.embedding(x)
-        x = self.transformer(x)
-        x = x.mean(dim=1)  # 평균 풀링으로 시퀀스 정보 보존
-        return self.fc_out(x)
 
 # 지표 계산 함수 (생략, 기존 코드 동일)
 # get_macd, get_rsi, get_adx, get_atr, get_features
@@ -240,12 +226,12 @@ def train_transformer_model(ticker, epochs=50):
     input_dim = 6
     d_model = 64
     num_heads = 8
-    num_layers = 2
+    num_layers = 4
     output_dim = 1
 
     model = TransformerModel(input_dim, d_model, num_heads, num_layers, output_dim)
     criterion = nn.HuberLoss(delta=1.0)  # Huber 손실 함수 사용
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, epochs + 1):
         for x_batch, y_batch in dataloader:
