@@ -4,10 +4,13 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+from sklearn.preprocessing import MinMaxScaler
 
 
 # API 키 설정
@@ -76,14 +79,12 @@ class TransformerModel(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(d_model, output_dim)
-        self.activation = nn.Sigmoid()  # 🚀 0~1 범위로 제한
 
     def forward(self, x):
         x = self.embedding(x)
         x = self.encoder(x)
-        x = self.fc(x[:, -1, :])  
-        x = self.activation(x)  # ✅ sigmoid 적용
-        return x
+        x = self.fc(x[:, -1, :])
+        return x  # Sigmoid를 사용하지 않음, BCEWithLogitsLoss가 처리
 # 지표 계산 함수 (생략, 기존 코드 동일)
 # get_macd, get_rsi, get_adx, get_atr, get_features
 
@@ -155,6 +156,17 @@ def get_atr(ticker, period=14):
 
     return df['ATR'].iloc[-1]  # 최신 ATR 값 반환
 
+# 데이터 정규화 함수
+def normalize_features(data):
+    # 정규화할 피처를 선택합니다.
+    features = ['macd', 'signal', 'rsi', 'adx', 'atr', 'return']
+
+    # MinMaxScaler로 정규화
+    scaler = MinMaxScaler()
+    data[features] = scaler.fit_transform(data[features])
+
+    return data
+
 def get_features(ticker):
     """코인의 과거 데이터와 지표를 가져와 머신러닝에 적합한 피처 생성"""
     df = pyupbit.get_ohlcv(ticker, interval="minute5", count=1000)
@@ -174,10 +186,13 @@ def get_features(ticker):
     df['return'] = df['close'].pct_change()  # 수익률
     df['future_return'] = df['close'].shift(-1) / df['close'] - 1  # 미래 수익률
 
+    # 미래 수익률을 이진 값으로 변환 (상승: 1, 하락: 0)
+    df['future_return'] = (df['future_return'] > 0).astype(int)
+
     # NaN 값 제거
     df.dropna(inplace=True)
-    return df
 
+    return normalize_features(df)
 # 거래 관련 함수 (생략, 기존 코드 동일)
 # get_balance, buy_crypto_currency, sell_crypto_currency
 
@@ -221,12 +236,12 @@ class TradingDataset(Dataset):
         y = self.data.iloc[idx + self.seq_len]['future_return']
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
 
-def train_transformer_model(ticker, epochs=50):
+def train_transformer_model(ticker, epochs=100):
     print(f"모델 학습 시작: {ticker}")
     input_dim = 6
-    d_model = 128
+    d_model = 64
     num_heads = 8
-    num_layers = 4
+    num_layers = 2
     output_dim = 1
 
     model = TransformerModel(input_dim, d_model, num_heads, num_layers, output_dim)
@@ -238,12 +253,14 @@ def train_transformer_model(ticker, epochs=50):
 
     seq_len = 30
     dataset = TradingDataset(data, seq_len)
-    
+
     if len(dataset) == 0:
         print(f"경고: {ticker}의 데이터셋이 너무 작아서 학습을 진행할 수 없음.")
         return None
-        
-    criterion = nn.MSELoss()
+
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+    criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, epochs + 1):
@@ -257,7 +274,7 @@ def train_transformer_model(ticker, epochs=50):
 
     print(f"모델 학습 완료: {ticker}")
     return model
-
+    
 def get_ml_signal(ticker, model):
     """AI 신호 계산"""
     try:
