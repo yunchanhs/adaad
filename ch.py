@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from torch.utils.data import Dataset, DataLoader
-import datetime
+
 
 # API 키 설정
 ACCESS_KEY = "J8iGqPwfjkX7Yg9bdzwFGkAZcTPU7rElXRozK7O4"
@@ -19,7 +19,7 @@ last_trained_time = None  # 마지막 학습 시간
 TRAINING_INTERVAL = timedelta(hours=8)  # 6시간마다 재학습
 
 # 매매 전략 관련 임계값
-ML_THRESHOLD = 0.01
+ML_THRESHOLD = 0.5
 ML_SELL_THRESHOLD = 0.3  # AI 신호 매도 기준
 STOP_LOSS_THRESHOLD = -0.05  # 손절 (-5%)
 TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
@@ -73,9 +73,9 @@ class TransformerModel(nn.Module):
 
     def forward(self, x):
         x = self.embedding(x)
-        x = self.transformer(x, x)
-        x = x[:, -1, :]  # 마지막 시퀀스의 출력
-        return self.fc_out(x)
+        x = self.encoder(x)
+        x = self.fc(x[:, -1, :])
+        return torch.sigmoid(x)  # 0~1 사이 값으로 변환
 
 # 지표 계산 함수 (생략, 기존 코드 동일)
 # get_macd, get_rsi, get_adx, get_atr, get_features
@@ -217,9 +217,9 @@ class TradingDataset(Dataset):
 def train_transformer_model(ticker, epochs=50):
     print(f"모델 학습 시작: {ticker}")
     input_dim = 6
-    d_model = 64
+    d_model = 128
     num_heads = 8
-    num_layers = 2
+    num_layers = 4
     output_dim = 1
 
     model = TransformerModel(input_dim, d_model, num_heads, num_layers, output_dim)
@@ -236,7 +236,7 @@ def train_transformer_model(ticker, epochs=50):
         print(f"경고: {ticker}의 데이터셋이 너무 작아서 학습을 진행할 수 없음.")
         return None
         
-    criterion = nn.MSELoss()
+    criterion = nn.SmoothL1Loss()  # 더 안정적인 손실 함수 사용
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, epochs + 1):
