@@ -22,7 +22,7 @@ last_trained_time = None  # 마지막 학습 시간
 TRAINING_INTERVAL = timedelta(hours=8)  # 6시간마다 재학습
 
 # 매매 전략 관련 임계값
-ML_THRESHOLD = 0.5
+ML_THRESHOLD = 0.15
 ML_SELL_THRESHOLD = 0.3  # AI 신호 매도 기준
 STOP_LOSS_THRESHOLD = -0.05  # 손절 (-5%)
 TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
@@ -155,44 +155,27 @@ def get_atr(ticker, period=14):
     df['ATR'] = df['TR'].rolling(window=period).mean()
 
     return df['ATR'].iloc[-1]  # 최신 ATR 값 반환
-
-# 데이터 정규화 함수
-def normalize_features(data):
-    # 정규화할 피처를 선택합니다.
-    features = ['macd', 'signal', 'rsi', 'adx', 'atr', 'return']
-
-    # MinMaxScaler로 정규화
-    scaler = MinMaxScaler()
-    data[features] = scaler.fit_transform(data[features])
-
-    return data
-
+    
 def get_features(ticker):
-    """코인의 과거 데이터와 지표를 가져와 머신러닝에 적합한 피처 생성"""
     df = pyupbit.get_ohlcv(ticker, interval="minute5", count=1000)
 
-    # MACD 및 Signal 계산
-    df['macd'], df['signal'] = get_macd(ticker)  # get_macd 함수 호출
+    df['macd'], df['signal'] = get_macd(ticker)
+    df['rsi'] = get_rsi(ticker)
+    df['adx'] = get_adx(ticker)
+    df['atr'] = get_atr(ticker)
 
-    # RSI 계산
-    df['rsi'] = get_rsi(ticker)  # get_rsi 함수 호출
+    df['return'] = df['close'].pct_change()
+    df['future_return'] = df['close'].shift(-1) / df['close'] - 1
 
-    # ADX 계산
-    df['adx'] = get_adx(ticker)  # get_adx 함수 호출
-
-    # ATR 계산
-    df['atr'] = get_atr(ticker)  # get_atr 함수 호출
-
-    df['return'] = df['close'].pct_change()  # 수익률
-    df['future_return'] = df['close'].shift(-1) / df['close'] - 1  # 미래 수익률
-
-    # 미래 수익률을 이진 값으로 변환 (상승: 1, 하락: 0)
-    df['future_return'] = (df['future_return'] > 0).astype(int)
-
-    # NaN 값 제거
     df.dropna(inplace=True)
 
-    return normalize_features(df)
+    # 🔥  MinMax 정규화 적용
+    scaler = MinMaxScaler()
+    df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']] = scaler.fit_transform(
+        df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']]
+    )
+
+    return df
 # 거래 관련 함수 (생략, 기존 코드 동일)
 # get_balance, buy_crypto_currency, sell_crypto_currency
 
