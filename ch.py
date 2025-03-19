@@ -22,7 +22,7 @@ last_trained_time = None  # 마지막 학습 시간
 TRAINING_INTERVAL = timedelta(hours=8)  # 6시간마다 재학습
 
 # 매매 전략 관련 임계값
-ML_THRESHOLD = 0.15
+ML_THRESHOLD = 0.5
 ML_SELL_THRESHOLD = 0.3  # AI 신호 매도 기준
 STOP_LOSS_THRESHOLD = -0.05  # 손절 (-5%)
 TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
@@ -35,7 +35,7 @@ highest_prices = {}  # 매수 후 최고 가격 저장
 recent_trades = {}  # 최근 거래 기록
 recent_surge_tickers = {}  # 최근 급상승 감지 코인 저장
 
-def get_top_tickers(n=3):
+def get_top_tickers(n=20):
     """거래량 상위 n개 코인을 선택"""
     tickers = pyupbit.get_tickers(fiat="KRW")
     volumes = []
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     models = {}
 
     # 초기 설정
-    top_tickers = get_top_tickers(n=3)
+    top_tickers = get_top_tickers(n=20)
     print(f"거래량 상위 코인: {top_tickers}")
     models = {ticker: train_transformer_model(ticker) for ticker in top_tickers}
     recent_surge_tickers = {}  # 급상승 코인 저장
@@ -334,7 +334,7 @@ if __name__ == "__main__":
 
             # ✅ 1. 상위 코인 업데이트 (6시간마다)
             if now.hour % 6 == 0 and now.minute == 0:
-                top_tickers = get_top_tickers(n=3)
+                top_tickers = get_top_tickers(n=20)
                 print(f"[{now}] 상위 코인 업데이트: {top_tickers}")
 
                 # 새롭게 추가된 코인 모델 학습
@@ -378,11 +378,14 @@ if __name__ == "__main__":
                     print(f" - MACD: {macd:.4f}, Signal: {signal:.4f}")
                     print(f" - RSI: {rsi:.2f}")
                     print(f" - ADX: {adx:.2f}")
+                    print(f" - ATR: {atr:.6f}")  # 🔥 ATR 값 출력 추가
                     print(f" - 현재 가격: {current_price:.2f}")
 
+                    ATR_THRESHOLD = 0.015
+                
                     # ✅ 4. 매수 조건 검사 (급상승 포함)
                     if isinstance(ml_signal, (int, float)) and 0 <= ml_signal <= 1:
-                        if ml_signal > ML_THRESHOLD and macd > signal and rsi < 40 and adx > 20:
+                        if ml_signal > ML_THRESHOLD and macd > signal and rsi < 50 and adx > 20 and atr > ATR_THRESHOLD:
                             krw_balance = get_balance("KRW")
                             print(f"[DEBUG] 보유 원화 잔고: {krw_balance:.2f}")
                             if krw_balance > 5000:
