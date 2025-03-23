@@ -90,88 +90,61 @@ class TransformerModel(nn.Module):
 # 지표 계산 함수 (생략, 기존 코드 동일)
 # get_macd, get_rsi, get_adx, get_atr, get_features
 
-def get_macd(ticker, period=14):
-    """주어진 코인의 MACD와 Signal 라인을 계산하는 함수"""
-    df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)  # 5분봉 데이터 가져오기
-    df['short_ema'] = df['close'].ewm(span=12, adjust=False).mean()  # 12-period EMA
-    df['long_ema'] = df['close'].ewm(span=26, adjust=False).mean()   # 26-period EMA
-    df['macd'] = df['short_ema'] - df['long_ema']  # MACD = Short EMA - Long EMA
-    df['signal'] = df['macd'].ewm(span=9, adjust=False).mean()  # Signal line = 9-period EMA of MACD
-    return df['macd'].iloc[-1], df['signal'].iloc[-1]  # 최신 값 반환
+def get_macd_from_df(df):
+    df['short_ema'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['short_ema'] - df['long_ema']
+    df['signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    return df
 
-def get_rsi(ticker, period=14):
-    """주어진 코인의 RSI (Relative Strength Index)를 계산하는 함수"""
-    df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)  # 5분봉 데이터 가져오기
-    delta = df['close'].diff()  # 종가 차이
+def get_rsi_from_df(df, period=14):
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    return df
 
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()  # 상승분의 평균
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()  # 하락분의 평균
-
-    rs = gain / loss  # 상대 강도
-    rsi = 100 - (100 / (1 + rs))  # RSI 계산
-
-    return rsi.iloc[-1]  # 최신 RSI 값 반환
-
-def get_adx(ticker, period=14):
-    """주어진 코인의 ADX (Average Directional Index)를 계산하는 함수"""
-    df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)  # 5분봉 데이터 가져오기
-
-    # True Range 계산
+def get_adx_from_df(df, period=14):
     df['H-L'] = df['high'] - df['low']
     df['H-C'] = abs(df['high'] - df['close'].shift(1))
     df['L-C'] = abs(df['low'] - df['close'].shift(1))
-    df['TR'] = df[['H-L', 'H-C', 'L-C']].max(axis=1)  # True Range
-
-    # +DM, -DM 계산
+    df['TR'] = df[['H-L', 'H-C', 'L-C']].max(axis=1)
     df['+DM'] = df['high'] - df['high'].shift(1)
     df['-DM'] = df['low'].shift(1) - df['low']
     df['+DM'] = df['+DM'].where(df['+DM'] > df['-DM'], 0)
     df['-DM'] = df['-DM'].where(df['-DM'] > df['+DM'], 0)
-
-    # Smoothed TR, +DM, -DM
     df['TR_smooth'] = df['TR'].rolling(window=period).sum()
     df['+DM_smooth'] = df['+DM'].rolling(window=period).sum()
     df['-DM_smooth'] = df['-DM'].rolling(window=period).sum()
-
-    # +DI, -DI 계산
     df['+DI'] = 100 * (df['+DM_smooth'] / df['TR_smooth'])
     df['-DI'] = 100 * (df['-DM_smooth'] / df['TR_smooth'])
-
-    # ADX 계산
     df['DX'] = 100 * abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
-    df['ADX'] = df['DX'].rolling(window=period).mean()  # ADX
+    df['adx'] = df['DX'].rolling(window=period).mean()
+    return df
 
-    return df['ADX'].iloc[-1]  # 최신 ADX 값 반환
-
-def get_atr(ticker, period=14):
-    """주어진 코인의 ATR (Average True Range)을 계산하는 함수"""
-    df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)  # 5분봉 데이터 가져오기
-
-    # True Range 계산
+def get_atr_from_df(df, period=14):
     df['H-L'] = df['high'] - df['low']
     df['H-C'] = abs(df['high'] - df['close'].shift(1))
     df['L-C'] = abs(df['low'] - df['close'].shift(1))
-    df['TR'] = df[['H-L', 'H-C', 'L-C']].max(axis=1)  # True Range
+    df['TR'] = df[['H-L', 'H-C', 'L-C']].max(axis=1)
+    df['atr'] = df['TR'].rolling(window=period).mean()
+    return df
 
-    # ATR 계산
-    df['ATR'] = df['TR'].rolling(window=period).mean()
-
-    return df['ATR'].iloc[-1]  # 최신 ATR 값 반환
-    
 def get_features(ticker):
     df = pyupbit.get_ohlcv(ticker, interval="minute5", count=1000)
 
-    df['macd'], df['signal'] = get_macd(ticker)
-    df['rsi'] = get_rsi(ticker)
-    df['adx'] = get_adx(ticker)
-    df['atr'] = get_atr(ticker)
+    df = get_macd_from_df(df)
+    df = get_rsi_from_df(df)
+    df = get_adx_from_df(df)
+    df = get_atr_from_df(df)
 
     df['return'] = df['close'].pct_change()
     df['future_return'] = df['close'].shift(-1) / df['close'] - 1
 
     df.dropna(inplace=True)
 
-    # 🔥  MinMax 정규화 적용
+    # 🔥  MinMax 정규화
     scaler = MinMaxScaler()
     df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']] = scaler.fit_transform(
         df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']]
