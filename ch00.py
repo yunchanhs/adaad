@@ -198,9 +198,9 @@ class TradingDataset(Dataset):
 def train_transformer_model(ticker, epochs=50):
     print(f"모델 학습 시작: {ticker}")
     input_dim = 6
-    d_model = 64
-    num_heads = 8
-    num_layers = 2
+    d_model = 32
+    num_heads = 4
+    num_layers = 1
     output_dim = 1
 
     model = TransformerModel(input_dim, d_model, num_heads, num_layers, output_dim)
