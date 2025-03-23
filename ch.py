@@ -370,6 +370,7 @@ if __name__ == "__main__":
                     macd, signal = get_macd(ticker)
                     rsi = get_rsi(ticker)
                     adx = get_adx(ticker)
+                    atr = get_atr(ticker)
                     current_price = pyupbit.get_current_price(ticker)
 
                     # 🛠 [DEBUG] 로그 추가
