@@ -272,27 +272,39 @@ def get_ml_signal(ticker, model):
         print(f"[{ticker}] AI 신호 계산 에러: {e}")
         return 0
 
-def should_sell(ticker, current_price):
+def should_sell(ticker, current_price, ml_signal):
     """트레일링 스탑 로직을 활용한 매도 판단"""
     if ticker not in entry_prices:
         return False
     
     entry_price = entry_prices[ticker]
+    
+    # 📌 최고 가격 업데이트
+    if ticker not in highest_prices:
+        highest_prices[ticker] = entry_price  # 초기값 설정
+    
     highest_prices[ticker] = max(highest_prices[ticker], current_price)
     peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]
 
-    # ✅ 손절 조건: ML 신호와 관계없이 즉시 매도!
+    # 🚨 손절 조건 (즉시 매도)
     if (current_price - entry_price) / entry_price < STOP_LOSS_THRESHOLD:
         print(f"[{ticker}] 🚨 손실률 초과! ({STOP_LOSS_THRESHOLD*100:.2f}%) 즉시 손절")
         return True  
 
-    # ✅ 익절 조건: ML 신호 참고하여 매도 여부 결정
-    if peak_drop > 0.02:  # 🔥 최고점 대비 2% 이상 하락
+    # 📉 익절 조건 (최고점 대비 2% 하락)
+    if peak_drop > 0.02:
         print(f"[{ticker}] 📉 고점 대비 2% 하락 (익절 고려)")
-        return True  
 
-    return False  
-    
+        # ✅ AI 신호가 부정적이면 매도, 긍정적이면 보류
+        if ml_signal < ML_SELL_THRESHOLD:
+            print(f"[{ticker}] AI 신호 약함 → 매도 결정")
+            return True  
+        else:
+            print(f"[{ticker}] AI 신호 강함 → 매도 보류")
+            return False  
+
+    return False
+  
 def backtest(ticker, model, initial_balance=1_000_000, fee=0.0005):
     """과거 데이터로 백테스트 실행"""
     data = get_features(ticker)
@@ -429,10 +441,10 @@ if __name__ == "__main__":
                     # ✅ 5. 매도 조건 검사 (백테스트 기반)
                     elif ticker in entry_prices:
                         entry_price = entry_prices[ticker]
-                        highest_prices[ticker] = max(highest_prices[ticker], current_price)
+                        highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
 
                         # ✅ 트레일링 스탑 & 손절 로직 반영
-                        if should_sell(ticker, current_price):
+                        if should_sell(ticker, current_price, ml_signal):
                             if ml_signal < ML_SELL_THRESHOLD:
                                 coin_balance = get_balance(ticker)
                                 if coin_balance > 0:
