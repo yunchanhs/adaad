@@ -347,20 +347,22 @@ if __name__ == "__main__":
 
     for ticker in top_tickers:
         model = train_transformer_model(ticker)
-        performance = backtest(ticker, model)  # 🔥 백테스트 실행
-        if performance > 1.1:  # ✅ 수익률 10% 이상 모델만 채킴
+        if model is None:
+            continue
+        performance = backtest(ticker, model)
+        if performance > 1.1:
             models[ticker] = model
             print(f"[{ticker}] 모델 유지 (백테스트 성과: {performance:.2f}배)")
         else:
             print(f"[{ticker}] 모델 제외 (백테스트 성과 부족: {performance:.2f}배)")
 
-    recent_surge_tickers = {}  # 급상상 코인 저장
+    recent_surge_tickers = {}
 
     try:
         while True:
             now = datetime.now()
 
-            # ✅ 1. 상위 코인 업데이트 (6시간마다)
+            # ✅ 1. 상위 코인 업데이트
             if now.hour % 6 == 0 and now.minute == 0:
                 top_tickers = get_top_tickers(n=20)
                 print(f"[{now}] 상위 코인 업데이트: {top_tickers}")
@@ -368,6 +370,8 @@ if __name__ == "__main__":
                 for ticker in top_tickers:
                     if ticker not in models:
                         model = train_transformer_model(ticker)
+                        if model is None:
+                            continue
                         performance = backtest(ticker, model)
                         if performance > 1.1:
                             models[ticker] = model
@@ -375,9 +379,8 @@ if __name__ == "__main__":
                         else:
                             print(f"[{ticker}] 모델 제외 (백테스트 성과 부족: {performance:.2f}배)")
 
-            # ✅ 2. 급상승 코인 감지
+            # ✅ 2. 급상승 감지
             surge_tickers = detect_surge_tickers(threshold=0.03)
-
             for ticker in surge_tickers:
                 if ticker not in recent_surge_tickers:
                     print(f"[{now}] 급상승 감지: {ticker}")
@@ -385,6 +388,8 @@ if __name__ == "__main__":
 
                     if ticker not in models:
                         model = train_transformer_model(ticker, epochs=10)
+                        if model is None:
+                            continue
                         performance = backtest(ticker, model)
                         if performance > 1.1:
                             models[ticker] = model
@@ -392,17 +397,21 @@ if __name__ == "__main__":
                         else:
                             print(f"[{ticker}] 급상승 모델 제외 (백테스트 성과 부족: {performance:.2f}배)")
 
-            # ✅ 3. 매수 대상 선정
+            # ✅ 3. 매수/매도 대상 선정
             target_tickers = set(top_tickers) | set(recent_surge_tickers.keys())
 
             for ticker in target_tickers:
-                last_trade_time = recent_trades.get(ticker, datetime.min)
                 cooldown_limit = SURGE_COOLDOWN_TIME if ticker in recent_surge_tickers else COOLDOWN_TIME
+                last_trade_time = recent_trades.get(ticker, datetime.min)
 
                 if now - last_trade_time < cooldown_limit:
                     continue
 
                 try:
+                    if ticker not in models:
+                        print(f"[{ticker}] 모델이 존재하지 않아 신호 계산을 건너뜁니다.")
+                        continue
+
                     df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)
                     if df is None or df.empty:
                         continue
@@ -419,15 +428,8 @@ if __name__ == "__main__":
                     atr = df['atr'].iloc[-1]
                     current_price = df['close'].iloc[-1]
 
-                    if ticker not in models:
-                        print(f"[{ticker}] 모델이 존재하지 않아 신호 계산을 건너뜁니다.")
-                        continue
-
                     ml_signal = get_ml_signal(ticker, models[ticker])
 
-                    if ticker not in entry_prices:
-                        continue  # 이건 now 반복문 안에서 쓰이므로 OK!
-                    
                     print(f"[DEBUG] {ticker} 매수 조건 검사")
                     print(f" - ML 신호: {ml_signal:.4f}")
                     print(f" - MACD: {macd:.4f}, Signal: {signal:.4f}")
@@ -457,25 +459,27 @@ if __name__ == "__main__":
                         else:
                             print(f"[{ticker}] 매수 조건 불충족")
 
-                    elif ticker in entry_prices:
+                    if ticker in entry_prices:
                         entry_price = entry_prices[ticker]
                         highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
 
                         if should_sell(ticker, current_price, ml_signal):
                             if ml_signal < ML_SELL_THRESHOLD:
                                 try:
-                                    coin_balance = get_balance(ticker)
+                                    coin = ticker.split('-')[1]
+                                    coin_balance = get_balance(coin)
                                 except Exception as e:
-                                    print(f"[{ticker}] 잔고 확인 중 에러 발생: {e}")
+                                    print(f"[{ticker}] 잔고 확인 에러: {e}")
                                     continue
-                                    
+
                                 if coin_balance > 0:
                                     sell_crypto_currency(ticker, coin_balance)
                                     del entry_prices[ticker]
                                     del highest_prices[ticker]
-                                    print(f"[{ticker}] 트레일링 스탑 또는 손절 매도 완료.")
+                                    recent_trades[ticker] = now
+                                    print(f"[{ticker}] 트레일링 스탑 or 손절 매도 완료.")
                             else:
-                                print(f"[{ticker}] AI 신호 긍정적, 매도 보류")
+                                print(f"[{ticker}] AI 신호 강함 → 매도 보류")
 
                 except Exception as e:
                     print(f"[{ticker}] 처리 중 에러 발생: {e}")
