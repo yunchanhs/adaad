@@ -29,6 +29,12 @@ TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
 COOLDOWN_TIME = timedelta(minutes=5)  # 동일 코인 재거래 쿨다운 시간
 SURGE_COOLDOWN_TIME = timedelta(minutes=10) # 급등 코인 쿨다운 시간
 
+# 계좌 정보 저장
+entry_prices = {}            # 매수한 가격 저장
+highest_prices = {}          # 매수 후 최고 가격 저장
+recent_trades = {}           # ✅ 최근 거래 기록 ← 이게 꼭 있어야 해!
+recent_surge_tickers = {}    # 최근 급상승 감지 코인 저장
+
 def get_top_tickers(n=20):
     """거래량 상위 n개 코인을 선택"""
     tickers = pyupbit.get_tickers(fiat="KRW")
@@ -421,11 +427,6 @@ if __name__ == "__main__":
 
                     if ticker not in entry_prices:
                         continue  # 이건 now 반복문 안에서 쓰이므로 OK!
-
-                    entry_price = entry_prices[ticker]
-                    highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
-                    recent_trades = {}  # 최근 거래 기록
-                    recent_surge_tickers = {}  # 최근 급상승 감지 코인 저장
                     
                     print(f"[DEBUG] {ticker} 매수 조건 검사")
                     print(f" - ML 신호: {ml_signal:.4f}")
