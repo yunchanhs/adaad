@@ -217,7 +217,7 @@ def train_transformer_model(ticker, epochs=50):
         print(f"경고: {ticker}의 데이터셋이 너무 작아서 학습을 진행할 수 없음.")
         return None
 
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=2)
 
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
