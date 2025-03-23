@@ -312,22 +312,49 @@ def backtest(ticker, model, initial_balance=1_000_000, fee=0.0005):
     position = 0
     entry_price = 0
 
-    for i in range(50, len(data) - 1):
-        x_input = torch.tensor(data.iloc[i-30:i][['macd', 'signal', 'rsi', 'adx', 'atr', 'return']].values,
-                               dtype=torch.float32).unsqueeze(0)
-        signal = model(x_input).item()
+    highest_price = 0  # 백테스트용 개별 최고가 추적
 
+    for i in range(50, len(data) - 1):
+        # 입력 데이터 준비
+        x_input = torch.tensor(
+            data.iloc[i-30:i][['macd', 'signal', 'rsi', 'adx', 'atr', 'return']].values,
+            dtype=torch.float32
+        ).unsqueeze(0)
+
+        ml_signal = model(x_input).item()
         current_price = data.iloc[i]['close']
 
-        if position == 0 and signal > ML_THRESHOLD:
+        # 매수 조건
+        if position == 0 and ml_signal > ML_THRESHOLD:
             position = balance / current_price
             entry_price = current_price
+            highest_price = entry_price  # 매수 시 최고가 초기화
             balance = 0
+            # print(f"[{ticker}] 🟢 매수 @ {current_price:.2f}, ML: {ml_signal:.4f}")
 
-        elif position > 0 and should_sell(ticker, current_price):
-            balance = position * current_price * (1 - fee)
-            position = 0
+        # 매도 조건
+        elif position > 0:
+            highest_price = max(highest_price, current_price)
 
+            # peak_drop 계산 및 손절/익절 조건 판단
+            peak_drop = (highest_price - current_price) / highest_price
+            unrealized_profit = (current_price - entry_price) / entry_price
+
+            # 손절 조건 (즉시 매도)
+            if unrealized_profit < STOP_LOSS_THRESHOLD:
+                balance = position * current_price * (1 - fee)
+                position = 0
+                # print(f"[{ticker}] 🔻 손절 @ {current_price:.2f}")
+                continue
+
+            # 익절 조건 + AI 신호 반영
+            if peak_drop > 0.02 and ml_signal < ML_SELL_THRESHOLD:
+                balance = position * current_price * (1 - fee)
+                position = 0
+                # print(f"[{ticker}] ✅ 익절 @ {current_price:.2f}, ML: {ml_signal:.4f}")
+                continue
+
+    # 포지션 종료 없이 끝났다면 현재가 기준 정산
     final_value = balance + (position * data.iloc[-1]['close'])
     return final_value / initial_balance
     
