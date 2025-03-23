@@ -243,7 +243,7 @@ def train_transformer_model(ticker, epochs=50):
 
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, epochs + 1):
