@@ -79,12 +79,14 @@ class TransformerModel(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(d_model, output_dim)
+        self.activation = nn.Sigmoid()  # 🔁 출력값 0~1로 제한
 
     def forward(self, x):
         x = self.embedding(x)
         x = self.encoder(x)
         x = self.fc(x[:, -1, :])
-        return x  # Sigmoid를 사용하지 않음, BCEWithLogitsLoss가 처리
+        x = self.activation(x)  # ✅ Sigmoid 활성화 함수 적용
+        return x
 # 지표 계산 함수 (생략, 기존 코드 동일)
 # get_macd, get_rsi, get_adx, get_atr, get_features
 
@@ -243,7 +245,7 @@ def train_transformer_model(ticker, epochs=50):
 
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, epochs + 1):
