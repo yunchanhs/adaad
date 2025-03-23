@@ -30,8 +30,11 @@ COOLDOWN_TIME = timedelta(minutes=5)  # 동일 코인 재거래 쿨다운 시간
 SURGE_COOLDOWN_TIME = timedelta(minutes=10) # 급등 코인 쿨다운 시간
 
 # 계좌 정보 저장
-entry_prices = {}  # 매수한 가격 저장
-highest_prices = {}  # 매수 후 최고 가격 저장
+if ticker not in entry_prices:
+    continue
+
+entry_price = entry_prices[ticker]
+highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
 recent_trades = {}  # 최근 거래 기록
 recent_surge_tickers = {}  # 최근 급상승 감지 코인 저장
 
@@ -419,8 +422,12 @@ if __name__ == "__main__":
                     atr = df['atr'].iloc[-1]
                     current_price = df['close'].iloc[-1]
 
-                    ml_signal = get_ml_signal(ticker, models[ticker])
+                    if ticker not in models:
+                        print(f"[{ticker}] 모델이 존재하지 않아 신호 계산을 건너뜁니다.")
+                        continue
 
+                    ml_signal = get_ml_signal(ticker, models[ticker])
+                    
                     print(f"[DEBUG] {ticker} 매수 조건 검사")
                     print(f" - ML 신호: {ml_signal:.4f}")
                     print(f" - MACD: {macd:.4f}, Signal: {signal:.4f}")
@@ -456,7 +463,12 @@ if __name__ == "__main__":
 
                         if should_sell(ticker, current_price, ml_signal):
                             if ml_signal < ML_SELL_THRESHOLD:
-                                coin_balance = get_balance(ticker)
+                                try:
+                                    coin_balance = get_balance(ticker)
+                                except Exception as e:
+                                    print(f"[{ticker}] 잔고 확인 중 에러 발생: {e}")
+                                    continue
+                                    
                                 if coin_balance > 0:
                                     sell_crypto_currency(ticker, coin_balance)
                                     del entry_prices[ticker]
