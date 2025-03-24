@@ -131,7 +131,7 @@ def get_atr_from_df(df, period=14):
     df['atr'] = df['TR'].rolling(window=period).mean()
     return df
 
-def get_features(ticker):
+def get_features(ticker, normalize=True):
     df = pyupbit.get_ohlcv(ticker, interval="minute5", count=1000)
 
     df = get_macd_from_df(df)
@@ -144,11 +144,11 @@ def get_features(ticker):
 
     df.dropna(inplace=True)
 
-    # 🔥  MinMax 정규화
-    scaler = MinMaxScaler()
-    df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']] = scaler.fit_transform(
-        df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']]
-    )
+    if normalize:
+        scaler = MinMaxScaler()
+        df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']] = scaler.fit_transform(
+            df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']]
+        )
 
     return df
 # 거래 관련 함수 (생략, 기존 코드 동일)
@@ -203,7 +203,7 @@ def train_transformer_model(ticker, epochs=50):
     output_dim = 1
 
     model = TransformerModel(input_dim, d_model, num_heads, num_layers, output_dim)
-    data = get_features(ticker)
+    data = get_features(ticker, normalize=True)  # 정규화 ON
 
     if data is None or data.empty:
         print(f"경고: {ticker}의 데이터가 비어 있음. 모델 학습을 건너뜁니다.")
@@ -351,7 +351,8 @@ if __name__ == "__main__":
                     df = get_rsi_from_df(df)
                     df = get_adx_from_df(df)
                     df = get_atr_from_df(df)
-                    
+                    df = get_features(ticker, normalize=False)  # 정규화 OFF
+
                     macd = df['macd'].iloc[-1]
                     signal = df['signal'].iloc[-1]
                     rsi = df['rsi'].iloc[-1]
