@@ -132,7 +132,7 @@ def get_atr_from_df(df, period=14):
     df['atr'] = df['TR'].rolling(window=period).mean()
     return df
 
-def get_features(ticker):
+def get_features(ticker, normalize=True):
     df = pyupbit.get_ohlcv(ticker, interval="minute5", count=1000)
 
     df = get_macd_from_df(df)
@@ -145,11 +145,11 @@ def get_features(ticker):
 
     df.dropna(inplace=True)
 
-    # 🔥  MinMax 정규화
-    scaler = MinMaxScaler()
-    df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']] = scaler.fit_transform(
-        df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']]
-    )
+    if normalize:
+        scaler = MinMaxScaler()
+        df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']] = scaler.fit_transform(
+            df[['macd', 'signal', 'rsi', 'adx', 'atr', 'return', 'future_return']]
+        )
 
     return df
 # 거래 관련 함수 (생략, 기존 코드 동일)
