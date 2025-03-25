@@ -22,7 +22,7 @@ last_trained_time = None  # 마지막 학습 시간
 TRAINING_INTERVAL = timedelta(hours=8)  # 6시간마다 재학습
 
 # 매매 전략 관련 임계값
-ML_THRESHOLD = 0.5
+ML_THRESHOLD = 0.65
 ML_SELL_THRESHOLD = 0.35  # AI 신호 매도 기준
 STOP_LOSS_THRESHOLD = -0.05  # 손절 (-5%)
 TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
