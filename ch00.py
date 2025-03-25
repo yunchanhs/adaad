@@ -26,8 +26,8 @@ ML_THRESHOLD = 0.5
 ML_SELL_THRESHOLD = 0.3  # AI 신호 매도 기준
 STOP_LOSS_THRESHOLD = -0.05  # 손절 (-5%)
 TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
-COOLDOWN_TIME = timedelta(minutes=5)  # 동일 코인 재거래 쿨다운 시간
-SURGE_COOLDOWN_TIME = timedelta(minutes=10) # 급등 코인 쿨다운 시간
+COOLDOWN_TIME = timedelta(minutes=7)  # 동일 코인 재거래 쿨다운 시간
+SURGE_COOLDOWN_TIME = timedelta(minutes=20) # 급등 코인 쿨다운 시간
 
 # 계좌 정보 저장
 entry_prices = {}            # 매수한 가격 저장
@@ -361,7 +361,7 @@ if __name__ == "__main__":
         if model is None:
             continue
         performance = backtest(ticker, model)
-        if performance > 1.1:
+        if performance > 1.05:
             models[ticker] = model
             print(f"[{ticker}] 모델 유지 (백테스트 성과: {performance:.2f}배)")
         else:
@@ -431,6 +431,7 @@ if __name__ == "__main__":
                     df = get_rsi_from_df(df)
                     df = get_adx_from_df(df)
                     df = get_atr_from_df(df)
+                    df = get_features(ticker, normalize=False)
 
                     macd = df['macd'].iloc[-1]
                     signal = df['signal'].iloc[-1]
