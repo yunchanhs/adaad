@@ -384,7 +384,7 @@ if __name__ == "__main__":
                         if model is None:
                             continue
                         performance = backtest(ticker, model)
-                        if performance > 1.1:
+                        if performance > 1.05:
                             models[ticker] = model
                             print(f"[{ticker}] 모델 추가 (백테스트 성과: {performance:.2f}배)")
                         else:
