@@ -35,7 +35,7 @@ highest_prices = {}  # 매수 후 최고 가격 저장
 recent_trades = {}  # 최근 거래 기록
 recent_surge_tickers = {}  # 최근 급상승 감지 코인 저장
 
-def get_top_tickers(n=60):
+def get_top_tickers(n=10):
     """거래량 상위 n개 코인을 선택"""
     tickers = pyupbit.get_tickers(fiat="KRW")
     volumes = []
@@ -274,7 +274,6 @@ def backtest(ticker, model, initial_balance=1_000_000, fee=0.0005):
     return final_value / initial_balance
 
 def should_sell(ticker, current_price, ml_signal):
-    """트레일링 스탑 로직을 활용한 매도 판단"""
     if ticker not in entry_prices:
         return False
 
@@ -287,14 +286,34 @@ def should_sell(ticker, current_price, ml_signal):
         print(f"[{ticker}] 🚨 손절 조건 충족! 손실률: {change_ratio*100:.2f}%")
         return True
 
+    if change_ratio > TAKE_PROFIT_THRESHOLD:
+        print(f"[{ticker}] 🎯 익절 조건 충족! 수익률: {change_ratio*100:.2f}%")
+        return True
+
     if peak_drop > 0.02:
-        print(f"[{ticker}] 📉 최고점 대비 2% 하락, 익절 고려")
+        print(f"[{ticker}] 📉 최고점 대비 2% 하락 중")
         if ml_signal < ML_SELL_THRESHOLD:
-            print(f"[{ticker}] AI 신호 약함 → 매도 결정")
+            print(f"[{ticker}] AI 신호 약함 → 매도")
             return True
-        else:
-            print(f"[{ticker}] AI 신호 강함 → 매도 보류")
-            return False
+
+    try:
+        df = pyupbit.get_ohlcv(ticker, interval=\"minute5\", count=200)
+        df = get_macd_from_df(df)
+        df = get_rsi_from_df(df)
+
+        macd = df['macd'].iloc[-1]
+        signal = df['signal'].iloc[-1]
+        rsi = df['rsi'].iloc[-1]
+
+        if rsi > 75:
+            print(f"[{ticker}] RSI 과매수 → 매도")
+            return True
+        if macd < signal:
+            print(f"[{ticker}] MACD 데드크로스 → 매도")
+            return True
+
+    except Exception as e:
+        print(f\"[{ticker}] 지표 계산 중 에러 (매도 조건): {e}\")
 
     return False
 
@@ -383,7 +402,7 @@ if __name__ == "__main__":
     tickers = pyupbit.get_tickers(fiat="KRW")
     models = {}
 
-    top_tickers = get_top_tickers(n=60)
+    top_tickers = get_top_tickers(n=10)
     print(f"거래량 상위 코인: {top_tickers}")
     models = {ticker: train_transformer_model(ticker) for ticker in top_tickers}
     recent_surge_tickers = {}
@@ -393,7 +412,7 @@ if __name__ == "__main__":
             now = datetime.now()
 
             if now.hour % 6 == 0 and now.minute == 0:
-                top_tickers = get_top_tickers(n=60)
+                top_tickers = get_top_tickers(n=10)
                 print(f"[{now}] 상위 코인 업데이트: {top_tickers}")
                 for ticker in top_tickers:
                     if ticker not in models:
