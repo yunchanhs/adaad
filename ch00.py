@@ -204,7 +204,7 @@ def train_transformer_model(ticker, epochs=50):
     output_dim = 1
 
     model = TransformerModel(input_dim, d_model, num_heads, num_layers, output_dim)
-    data = get_features(ticker)
+    data = get_features(ticker, normalize=True)
 
     if data is None or data.empty:
         print(f"경고: {ticker}의 데이터가 비어 있음. 모델 학습을 건너뜁니다.")
