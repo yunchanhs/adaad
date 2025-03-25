@@ -26,8 +26,8 @@ ML_THRESHOLD = 0.5
 ML_SELL_THRESHOLD = 0.35  # AI 신호 매도 기준
 STOP_LOSS_THRESHOLD = -0.05  # 손절 (-5%)
 TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
-COOLDOWN_TIME = timedelta(minutes=5)  # 동일 코인 재거래 쿨다운 시간
-SURGE_COOLDOWN_TIME = timedelta(minutes=10) # 급등 코인 쿨다운 시간
+COOLDOWN_TIME = timedelta(minutes=10)  # 동일 코인 재거래 쿨다운 시간
+SURGE_COOLDOWN_TIME = timedelta(minutes=30) # 급등 코인 쿨다운 시간
 
 # 계좌 정보 저장
 entry_prices = {}  # 매수한 가격 저장
@@ -297,6 +297,68 @@ def should_sell(ticker, current_price, ml_signal):
             return False
 
     return False
+
+def get_unrealized_profit(ticker, current_price):
+    if ticker not in entry_prices:
+        return 0
+    entry_price = entry_prices[ticker]
+    return (current_price - entry_price) / entry_price
+
+def rebalance_portfolio(models):
+    print(f"[리밸런싱] 시작 - {datetime.now()}")
+    active_tickers = list(entry_prices.keys())
+    total_balance = get_balance("KRW")
+    ranked = []
+
+    for ticker in active_tickers:
+        try:
+            df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)
+            if df is None or df.empty:
+                continue
+
+            df = get_macd_from_df(df)
+            df = get_rsi_from_df(df)
+            df = get_adx_from_df(df)
+            df = get_atr_from_df(df)
+            df = get_features(ticker, normalize=False)
+
+            current_price = df['close'].iloc[-1]
+            profit = get_unrealized_profit(ticker, current_price)
+            ml_signal = get_ml_signal(ticker, models[ticker])
+            adx = df['adx'].iloc[-1]
+            rsi = df['rsi'].iloc[-1]
+
+            if adx < 15 or rsi > 70:
+                continue
+
+            rank_score = profit + ml_signal * 1.5
+            ranked.append((ticker, rank_score, profit, ml_signal, current_price))
+
+        except Exception as e:
+            print(f"[{ticker}] 리밸런싱 중 오류: {e}")
+
+    ranked.sort(key=lambda x: x[1], reverse=True)
+    top_rebal_tickers = ranked[:3]
+
+    for ticker, _, profit, _, _ in ranked[3:]:
+        coin_balance = get_balance(ticker.split('-')[1])
+        if coin_balance > 0:
+            sell_crypto_currency(ticker, coin_balance)
+            del entry_prices[ticker]
+            del highest_prices[ticker]
+            recent_trades[ticker] = datetime.now()
+            print(f"[{ticker}] 리밸런싱: 정리됨 (수익률 {profit:.2%})")
+
+    available_krw = get_balance("KRW")
+    if available_krw > 10000 and len(top_rebal_tickers) > 0:
+        allocation = available_krw / len(top_rebal_tickers)
+        for ticker, _, _, _, price in top_rebal_tickers:
+            buy_result = buy_crypto_currency(ticker, allocation)
+            if buy_result:
+                entry_prices[ticker] = price
+                highest_prices[ticker] = price
+                recent_trades[ticker] = datetime.now()
+                print(f"[{ticker}] 리밸런싱: 추가 매수 ({allocation:.0f}원 @ {price:.2f})")
 
 if __name__ == "__main__":
     upbit = pyupbit.Upbit(ACCESS_KEY, SECRET_KEY)
