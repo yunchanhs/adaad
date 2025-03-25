@@ -249,35 +249,46 @@ def get_ml_signal(ticker, model):
         return 0
 
 def should_sell(ticker, current_price, ml_signal):
-    """트레일링 스탑 로직을 활용한 매도 판단"""
     if ticker not in entry_prices:
         return False
-    
+
     entry_price = entry_prices[ticker]
-    
-    # 📌 최고 가격 업데이트
-    if ticker not in highest_prices:
-        highest_prices[ticker] = entry_price  # 초기값 설정
-    
-    highest_prices[ticker] = max(highest_prices[ticker], current_price)
+    highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
     peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]
+    change_ratio = (current_price - entry_price) / entry_price
 
-    # 🚨 손절 조건 (즉시 매도)
-    if (current_price - entry_price) / entry_price < STOP_LOSS_THRESHOLD:
-        print(f"[{ticker}] 🚨 손실률 초과! ({STOP_LOSS_THRESHOLD*100:.2f}%) 즉시 손절")
-        return True  
+    if change_ratio < STOP_LOSS_THRESHOLD:
+        print(f"[{ticker}] 🚨 손절 조건 충족! 손실률: {change_ratio*100:.2f}%")
+        return True
 
-    # 📉 익절 조건 (최고점 대비 2% 하락)
+    if change_ratio > TAKE_PROFIT_THRESHOLD:
+        print(f"[{ticker}] 🎯 익절 조건 충족! 수익률: {change_ratio*100:.2f}%")
+        return True
+
     if peak_drop > 0.02:
-        print(f"[{ticker}] 📉 고점 대비 2% 하락 (익절 고려)")
-
-        # ✅ AI 신호가 부정적이면 매도, 긍정적이면 보류
+        print(f"[{ticker}] 📉 최고점 대비 2% 하락 중")
         if ml_signal < ML_SELL_THRESHOLD:
-            print(f"[{ticker}] AI 신호 약함 → 매도 결정")
-            return True  
-        else:
-            print(f"[{ticker}] AI 신호 강함 → 매도 보류")
-            return False  
+            print(f"[{ticker}] AI 신호 약함 → 매도")
+            return True
+
+    try:
+        df = pyupbit.get_ohlcv(ticker, interval=\"minute5\", count=200)
+        df = get_macd_from_df(df)
+        df = get_rsi_from_df(df)
+
+        macd = df['macd'].iloc[-1]
+        signal = df['signal'].iloc[-1]
+        rsi = df['rsi'].iloc[-1]
+
+        if rsi > 75:
+            print(f"[{ticker}] RSI 과매수 → 매도")
+            return True
+        if macd < signal:
+            print(f"[{ticker}] MACD 데드크로스 → 매도")
+            return True
+
+    except Exception as e:
+        print(f\"[{ticker}] 지표 계산 중 에러 (매도 조건): {e}\")
 
     return False
   
