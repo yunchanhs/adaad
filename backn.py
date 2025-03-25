@@ -11,7 +11,7 @@ from sklearn.metrics import mean_squared_error
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import MinMaxScaler
-
+from scipy import stats
 
 # API 키 설정
 ACCESS_KEY = "J8iGqPwfjkX7Yg9bdzwFGkAZcTPU7rElXRozK7O4"
@@ -304,6 +304,16 @@ def get_unrealized_profit(ticker, current_price):
     entry_price = entry_prices[ticker]
     return (current_price - entry_price) / entry_price
 
+def get_percentile_signal(ticker, current_signal):
+    try:
+        recent_signals = get_recent_ml_outputs(ticker)  # 최근 N개의 예측값 리스트
+        if not recent_signals:
+            return 0
+        percentile = stats.percentileofscore(recent_signals, current_signal) / 100.0
+        return percentile
+    except:
+        return 0
+
 def rebalance_portfolio(models):
     print(f"[리밸런싱] 시작 - {datetime.now()}")
     active_tickers = list(entry_prices.keys())
@@ -332,6 +342,12 @@ def rebalance_portfolio(models):
                 continue
 
             rank_score = profit + ml_signal * 1.5
+
+            print(f"[리밸런싱] {ticker} 평가:")
+            print(f" - 수익률: {profit*100:.2f}%")
+            print(f" - ML 신호: {ml_signal:.4f}, 백분위: {percentile:.4f}")
+            print(f" - Rank 점수: {rank_score:.4f}")
+    
             ranked.append((ticker, rank_score, profit, ml_signal, current_price))
 
         except Exception as e:
@@ -367,7 +383,6 @@ if __name__ == "__main__":
     tickers = pyupbit.get_tickers(fiat="KRW")
     models = {}
 
-    # 초기 설정
     top_tickers = get_top_tickers(n=60)
     print(f"거래량 상위 코인: {top_tickers}")
     models = {ticker: train_transformer_model(ticker) for ticker in top_tickers}
@@ -380,18 +395,18 @@ if __name__ == "__main__":
             if now.hour % 6 == 0 and now.minute == 0:
                 top_tickers = get_top_tickers(n=60)
                 print(f"[{now}] 상위 코인 업데이트: {top_tickers}")
-
                 for ticker in top_tickers:
                     if ticker not in models:
                         models[ticker] = train_transformer_model(ticker)
 
-            surge_tickers = detect_surge_tickers(threshold=0.03)
+            if now.hour % 6 == 1 and now.minute == 0:
+                rebalance_portfolio(models)
 
+            surge_tickers = detect_surge_tickers(threshold=0.03)
             for ticker in surge_tickers:
                 if ticker not in recent_surge_tickers:
                     print(f"[{now}] 급상승 감지: {ticker}")
                     recent_surge_tickers[ticker] = now
-
                     if ticker not in models:
                         models[ticker] = train_transformer_model(ticker, epochs=10)
 
@@ -413,7 +428,7 @@ if __name__ == "__main__":
                     df = get_rsi_from_df(df)
                     df = get_adx_from_df(df)
                     df = get_atr_from_df(df)
-                    df = get_features(ticker, normalize=False)  # 정규화 OFF
+                    df = get_features(ticker, normalize=False)
 
                     macd = df['macd'].iloc[-1]
                     signal = df['signal'].iloc[-1]
@@ -423,20 +438,20 @@ if __name__ == "__main__":
                     current_price = df['close'].iloc[-1]
 
                     ml_signal = get_ml_signal(ticker, models[ticker])
+                    percentile = get_percentile_signal(ticker, ml_signal)
 
-                    print(f"[DEBUG] {ticker} 매수 조건 검사")
-                    print(f" - ML 신호: {ml_signal:.4f}")
-                    print(f" - MACD: {macd:.4f}, Signal: {signal:.4f}")
-                    print(f" - RSI: {rsi:.2f}")
-                    print(f" - ADX: {adx:.2f}")
-                    print(f" - ATR: {atr:.6f}")
-                    print(f" - 현재 가격: {current_price:.2f}")
-
+                    is_surge = ticker in recent_surge_tickers
                     ATR_THRESHOLD = 0.015
 
-                    if isinstance(ml_signal, (int, float)) and 0 <= ml_signal <= 1:
+                    print(f"[DEBUG] {ticker} 조건 확인:")
+                    print(f" - 현재 가격: {current_price:.2f}")
+                    print(f" - ML 신호: {ml_signal:.4f}, 백분위: {percentile:.4f}")
+                    print(f" - MACD: {macd:.4f}, Signal: {signal:.4f}")
+                    print(f" - RSI: {rsi:.2f}, ADX: {adx:.2f}, ATR: {atr:.6f}")
+
+                    if isinstance(percentile, (int, float)) and 0 <= percentile <= 1:
                         if is_surge:
-                            if ml_signal > ML_THRESHOLD and adx > 20 and atr > ATR_THRESHOLD:
+                            if percentile > 0.9 and adx > 20 and atr > ATR_THRESHOLD:
                                 krw_balance = get_balance("KRW")
                                 if krw_balance > 5000:
                                     buy_amount = krw_balance * 0.3
@@ -446,10 +461,8 @@ if __name__ == "__main__":
                                         highest_prices[ticker] = current_price
                                         recent_trades[ticker] = now
                                         print(f"[{ticker}] (급등) 매수 완료: {buy_amount:.2f}원 @ {current_price:.2f}")
-                                else:
-                                    print(f"[{ticker}] 급등 매수 조건 불충족")
                         else:
-                            if ml_signal > ML_THRESHOLD and macd > signal and rsi < 50 and adx > 20 and atr > ATR_THRESHOLD:
+                            if percentile > 0.85 and macd > signal and rsi < 50 and adx > 20 and atr > ATR_THRESHOLD:
                                 krw_balance = get_balance("KRW")
                                 if krw_balance > 5000:
                                     buy_amount = krw_balance * 0.3
@@ -459,8 +472,6 @@ if __name__ == "__main__":
                                         highest_prices[ticker] = current_price
                                         recent_trades[ticker] = now
                                         print(f"[{ticker}] 매수 완료: {buy_amount:.2f}원 @ {current_price:.2f}")
-                            else:
-                                print(f"[{ticker}] 일반 매수 조건 불충족")
 
                     elif ticker in entry_prices:
                         entry_price = entry_prices[ticker]
@@ -478,4 +489,5 @@ if __name__ == "__main__":
                     print(f"[{ticker}] 처리 중 에러 발생: {e}")
 
     except KeyboardInterrupt:
-        print("프로그램이 종료되었습니다."
+        print("프로그램이 종료되었습니다.")
+
