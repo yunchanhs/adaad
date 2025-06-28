@@ -29,8 +29,8 @@ ML_THRESHOLD = 0.5
 ML_SELL_THRESHOLD = 0.3  # AI 신호 매도 기준
 STOP_LOSS_THRESHOLD = -0.05  # 손절 (-5%)
 TAKE_PROFIT_THRESHOLD = 0.1  # 익절 (10%)
-COOLDOWN_TIME = timedelta(minutes=7)  # 동일 코인 재거래 쿨다운 시간
-SURGE_COOLDOWN_TIME = timedelta(minutes=20) # 급등 코인 쿨다운 시간
+COOLDOWN_TIME = timedelta(minutes=30)  # 동일 코인 재거래 쿨다운 시간
+SURGE_COOLDOWN_TIME = timedelta(minutes=60) # 급등 코인 쿨다운 시간
 
 # 계좌 정보 저장
 entry_prices = {}            # 매수한 가격 저장
