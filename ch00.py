@@ -11,6 +11,9 @@ from sklearn.metrics import mean_squared_error
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import MinMaxScaler
+import os
+import pickle
+import threading
 
 
 # API 키 설정
@@ -359,6 +362,25 @@ def backtest(ticker, model, initial_balance=1_000_000, fee=0.0005):
     # 포지션 종료 없이 끝났다면 현재가 기준 정산
     final_value = balance + (position * data.iloc[-1]['close'])
     return final_value / initial_balance
+
+# === [3] 자동 저장 함수 정의 (여기!) ===
+def auto_save_state(interval=300):
+    while True:
+        try:
+            with open("entry_prices.pkl", "wb") as f:
+                pickle.dump(entry_prices, f)
+            with open("recent_trades.pkl", "wb") as f:
+                pickle.dump(recent_trades, f)
+            with open("highest_prices.pkl", "wb") as f:
+                pickle.dump(highest_prices, f)
+            print("[백업] 상태 자동 저장 완료")
+        except Exception as e:
+            print(f"[백업 오류] 상태 저장 실패: {e}")
+        time.sleep(interval)
+
+# 자동 저장 쓰레드 실행
+save_thread = threading.Thread(target=auto_save_state, daemon=True)
+save_thread.start()
     
 if __name__ == "__main__":
     upbit = pyupbit.Upbit(ACCESS_KEY, SECRET_KEY)
