@@ -35,6 +35,14 @@ highest_prices = {}          # 매수 후 최고 가격 저장
 recent_trades = {}           # ✅ 최근 거래 기록 ← 이게 꼭 있어야 해!
 recent_surge_tickers = {}    # 최근 급상승 감지 코인 저장
 
+# 저장
+with open("entry_prices.pkl", "wb") as f:
+    pickle.dump(entry_prices, f)
+
+# 로딩
+with open("entry_prices.pkl", "rb") as f:
+    entry_prices = pickle.load(f)
+    
 def get_top_tickers(n=20):
     """거래량 상위 n개 코인을 선택"""
     tickers = pyupbit.get_tickers(fiat="KRW")
@@ -159,8 +167,15 @@ def get_features(ticker, normalize=True):
 upbit = pyupbit.Upbit(ACCESS_KEY, SECRET_KEY)
 
 def get_balance(ticker):
-    return upbit.get_balance(ticker)
-
+    try:
+        balance = upbit.get_balance(ticker)
+        if balance is None:
+            print(f"[경고] {ticker} 잔고 None 반환 → 0으로 처리")
+            return 0
+        return balance
+    except Exception as e:
+        print(f"[오류] {ticker} 잔고 조회 실패: {e}")
+        return 0
 
 def buy_crypto_currency(ticker, amount):
     """시장가로 코인 매수"""
