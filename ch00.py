@@ -38,20 +38,20 @@ highest_prices = {}          # 매수 후 최고 가격 저장
 recent_trades = {}           # ✅ 최근 거래 기록 ← 이게 꼭 있어야 해!
 recent_surge_tickers = {}    # 최근 급상승 감지 코인 저장
 
-# 이전 상태 불러오기
-if os.path.exists("entry_prices.pkl"):
-    with open("entry_prices.pkl", "rb") as f:
-        entry_prices = pickle.load(f)
+# === 2. 로딩 함수 및 초기화 ===
+def load_pickle(filename, default_value):
+    if os.path.exists(filename):
+        try:
+            with open(filename, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            print(f"[경고] {filename} 로딩 실패: {e}")
+    return default_value
 
-if os.path.exists("recent_trades.pkl"):
-    with open("recent_trades.pkl", "rb") as f:
-        recent_trades = pickle.load(f)
-
-if os.path.exists("highest_prices.pkl"):
-    with open("highest_prices.pkl", "rb") as f:
-        highest_prices = pickle.load(f)
-
-print("[✅ 복구] 이전 매매 상태 불러오기 완료")
+# ✅  로딩 (여기가 최고 위치!)
+entry_prices = load_pickle("entry_prices.pkl", {})
+recent_trades = load_pickle("recent_trades.pkl", {})
+highest_prices = load_pickle("highest_prices.pkl", {})
     
 def get_top_tickers(n=20):
     """거래량 상위 n개 코인을 선택"""
