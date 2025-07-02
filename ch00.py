@@ -310,25 +310,37 @@ def should_sell(ticker, current_price, ml_signal):
 
     entry_price = entry_prices[ticker]
     highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
-    peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]
-    change_ratio = (current_price - entry_price) / entry_price
 
+    change_ratio = (current_price - entry_price) / entry_price  # 수익률
+    peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]  # 최고점 대비 하락률
+
+    # 🚨 손절 조건 (-5% 하락)
     if change_ratio < STOP_LOSS_THRESHOLD:
-        print(f"[{ticker}] 🚨 손절 조건 충족! 손실률: {change_ratio*100:.2f}%")
+        print(f"[{ticker}] 🚨 손절 조건! 손실률: {change_ratio*100:.2f}%")
         return True
 
-    if change_ratio > TAKE_PROFIT_THRESHOLD:
-        print(f"[{ticker}] 🎯 익절 조건 충족! 수익률: {change_ratio*100:.2f}%")
-        return True
-
-    if peak_drop > 0.02:
-        print(f"[{ticker}] 📉 최고점 대비 2% 하락 중")
-        if ml_signal < ML_SELL_THRESHOLD:
-            print(f"[{ticker}] AI 신호 약함 → 매도")
+    # ✅ 강한 익절 조건 (15% 이상)
+    if change_ratio > 0.15:
+        if ml_signal < 0.5:  # AI 신호 약하면
+            print(f"[{ticker}] ✅ 강한 익절 + AI 약함 → 매도")
             return True
+        else:
+            print(f"[{ticker}] ✅ 강한 익절이지만 AI 강함 → 보유")
+            return False
 
+    # 📉 최고점 대비 2.5% 이상 하락 + AI 신호 약함
+    if peak_drop > 0.025 and ml_signal < 0.5:
+        print(f"[{ticker}] 📉 트레일링 스탑! 최고점 대비 하락률: {peak_drop*100:.2f}%")
+        return True
+
+    # 📈 이익 중인데 AI 신호도 강함 → 계속 보유
+    if change_ratio > 0.1 and ml_signal > 0.6:
+        print(f"[{ticker}] 📈 이익 중 + AI 강함 → 추세 유지")
+        return False
+
+    # 🔍 RSI & MACD 참고 지표
     try:
-        df = pyupbit.get_ohlcv(ticker, interval=\"minute5\", count=200)
+        df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)
         df = get_macd_from_df(df)
         df = get_rsi_from_df(df)
 
@@ -336,15 +348,13 @@ def should_sell(ticker, current_price, ml_signal):
         signal = df['signal'].iloc[-1]
         rsi = df['rsi'].iloc[-1]
 
-        if rsi > 75:
-            print(f"[{ticker}] RSI 과매수 → 매도")
-            return True
-        if macd < signal:
-            print(f"[{ticker}] MACD 데드크로스 → 매도")
-            return True
-
+        if rsi > 80 and macd < signal:
+            print(f"[{ticker}] RSI 과매수 + MACD 데드크로스 경고")
+            if ml_signal < 0.4 and change_ratio > 0.08:
+                print(f"[{ticker}] AI 약함 + 지표도 경고 → 매도")
+                return True
     except Exception as e:
-        print(f\"[{ticker}] 지표 계산 중 에러 (매도 조건): {e}\")
+        print(f"[{ticker}] 지표 계산 중 에러 (매도 조건): {e}")
 
     return False
   
