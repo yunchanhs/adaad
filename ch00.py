@@ -53,18 +53,38 @@ entry_prices = load_pickle("entry_prices.pkl", {})
 recent_trades = load_pickle("recent_trades.pkl", {})
 highest_prices = load_pickle("highest_prices.pkl", {})
     
-def get_top_tickers(n=20):
-    """거래량 상위 n개 코인을 선택"""
+def get_top_tickers(n=40):
+    """
+    최근 3일 평균 거래대금 기준 + 급등 초기 필터 보완
+    ① 거래대금 = 거래량 * 종가
+    ② 가격 기준으로 비정상 데이터 보정
+    ③ 급등 초기 코인도 일부 포함
+    """
     tickers = pyupbit.get_tickers(fiat="KRW")
-    volumes = []
+    scores = []
+
     for ticker in tickers:
         try:
-            df = pyupbit.get_ohlcv(ticker, interval="day", count=1)
-            volumes.append((ticker, df['volume'].iloc[-1]))
+            df = pyupbit.get_ohlcv(ticker, interval="day", count=3)
+            if df is None or df.empty:
+                continue
+
+            # 단기 평균 거래대금 계산
+            df["value"] = df["close"] * df["volume"]
+            avg_value = df["value"].mean()
+
+            # 비정상 급등 가격에 대한 로그 보정 (단점 보완)
+            adjusted_score = np.log1p(avg_value)  # log(1 + 거래대금)
+
+            scores.append((ticker, adjusted_score))
         except:
-            volumes.append((ticker, 0))
-    sorted_tickers = sorted(volumes, key=lambda x: x[1], reverse=True)
-    return [ticker for ticker, _ in sorted_tickers[:n]]
+            continue
+
+    # 점수 기준 상위 n개 선택
+    sorted_scores = sorted(scores, key=lambda x: x[1], reverse=True)
+    top_tickers = [ticker for ticker, _ in sorted_scores[:n]]
+
+    return top_tickers
 
 def detect_surge_tickers(threshold=0.03):
     """실시간 급상승 코인을 감지"""
@@ -258,6 +278,17 @@ def train_transformer_model(ticker, epochs=50):
 
     print(f"모델 학습 완료: {ticker}")
     return model
+
+def should_retrain(ticker, last_trained_time_dict, model, min_performance=1.05):
+    now = datetime.now()
+    last_time = last_trained_time_dict.get(ticker, datetime.min)
+
+    if now - last_time > TRAINING_INTERVAL:
+        perf = backtest(ticker, model)
+        if perf < min_performance:
+            print(f"[{ticker}] 모델 재학습 필요 (성과: {perf:.2f})")
+            return True
+    return False
     
 def get_ml_signal(ticker, model):
     """AI 신호 계산"""
@@ -397,7 +428,7 @@ if __name__ == "__main__":
     models = {}
 
     # 초기 설정
-    top_tickers = get_top_tickers(n=20)
+    top_tickers = get_top_tickers(n=40)
     print(f"거래량 상위 코인: {top_tickers}")
 
     for ticker in top_tickers:
@@ -419,20 +450,21 @@ if __name__ == "__main__":
 
             # ✅ 1. 상위 코인 업데이트
             if now.hour % 6 == 0 and now.minute == 0:
-                top_tickers = get_top_tickers(n=20)
+                top_tickers = get_top_tickers(n=40)
                 print(f"[{now}] 상위 코인 업데이트: {top_tickers}")
 
                 for ticker in top_tickers:
-                    if ticker not in models:
+                    model = models.get(ticker)
+                    if model is None or should_retrain(ticker, recent_trades, model):
                         model = train_transformer_model(ticker)
                         if model is None:
                             continue
                         performance = backtest(ticker, model)
-                        if performance > 1.05:
+                        if performance >= 1.05:
                             models[ticker] = model
-                            print(f"[{ticker}] 모델 추가 (백테스트 성과: {performance:.2f}배)")
+                            print(f"[{ticker}] 모델 추가/갱신 (성과: {performance:.2f}배)")
                         else:
-                            print(f"[{ticker}] 모델 제외 (백테스트 성과 부족: {performance:.2f}배)")
+                            print(f"[{ticker}] 모델 제외 (성과 부족: {performance:.2f}배)")
 
             # ✅ 2. 급상승 감지
             surge_tickers = detect_surge_tickers(threshold=0.03)
