@@ -311,34 +311,38 @@ def should_sell(ticker, current_price, ml_signal):
     entry_price = entry_prices[ticker]
     highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
 
-    change_ratio = (current_price - entry_price) / entry_price  # 수익률
-    peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]  # 최고점 대비 하락률
+    change_ratio = (current_price - entry_price) / entry_price
+    peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]
 
-    # 🚨 손절 조건 (-5% 하락)
+    # 🚨 손절 조건 (-5% 손실)
     if change_ratio < STOP_LOSS_THRESHOLD:
-        print(f"[{ticker}] 🚨 손절 조건! 손실률: {change_ratio*100:.2f}%")
-        return True
+        if ml_signal < 0.5:
+            print(f"[{ticker}] 🚨 손절 조건! 손실률: {change_ratio*100:.2f}% + AI 약함 → 매도")
+            return True
+        else:
+            print(f"[{ticker}] ⚠️ 손실이지만 AI 강함 → 반등 기대, 보유")
+            return False
 
-    # ✅ 강한 익절 조건 (15% 이상)
+    # ✅ 강한 익절 조건 (15% 이상 수익)
     if change_ratio > 0.15:
-        if ml_signal < 0.5:  # AI 신호 약하면
+        if ml_signal < 0.5:
             print(f"[{ticker}] ✅ 강한 익절 + AI 약함 → 매도")
             return True
         else:
-            print(f"[{ticker}] ✅ 강한 익절이지만 AI 강함 → 보유")
+            print(f"[{ticker}] ✅ 강한 익절 + AI 강함 → 보유 유지")
             return False
 
-    # 📉 최고점 대비 2.5% 이상 하락 + AI 신호 약함
+    # 📉 트레일링 스탑 조건
     if peak_drop > 0.025 and ml_signal < 0.5:
-        print(f"[{ticker}] 📉 트레일링 스탑! 최고점 대비 하락률: {peak_drop*100:.2f}%")
+        print(f"[{ticker}] 📉 트레일링 스탑! 최고점 대비 하락률: {peak_drop*100:.2f}% + AI 약함 → 매도")
         return True
 
-    # 📈 이익 중인데 AI 신호도 강함 → 계속 보유
-    if change_ratio > 0.1 and ml_signal > 0.6:
-        print(f"[{ticker}] 📈 이익 중 + AI 강함 → 추세 유지")
+    # 📈 추세 보유 조건
+    if change_ratio > 0.1 and ml_signal >= 0.6:
+        print(f"[{ticker}] 📈 수익 + AI 강함 → 보유 유지")
         return False
 
-    # 🔍 RSI & MACD 참고 지표
+    # 🔍 RSI & MACD 분리 분석
     try:
         df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)
         df = get_macd_from_df(df)
@@ -348,15 +352,25 @@ def should_sell(ticker, current_price, ml_signal):
         signal = df['signal'].iloc[-1]
         rsi = df['rsi'].iloc[-1]
 
-        if rsi > 80 and macd < signal:
-            print(f"[{ticker}] RSI 과매수 + MACD 데드크로스 경고")
-            if ml_signal < 0.4 and change_ratio > 0.08:
-                print(f"[{ticker}] AI 약함 + 지표도 경고 → 매도")
+        # MACD 데드크로스
+        if macd < signal and change_ratio > 0.08:
+            print(f"[{ticker}] 📉 MACD 데드크로스 발생")
+            if ml_signal < 0.5:
+                print(f"[{ticker}] MACD 약세 + AI 약함 → 매도")
                 return True
+
+        # RSI 과매수
+        if rsi > 80 and change_ratio > 0.08:
+            print(f"[{ticker}] 🔴 RSI 과매수 상태")
+            if ml_signal < 0.5:
+                print(f"[{ticker}] RSI 과매수 + AI 약함 → 매도")
+                return True
+
     except Exception as e:
-        print(f"[{ticker}] 지표 계산 중 에러 (매도 조건): {e}")
+        print(f"[{ticker}] 지표 계산 중 에러: {e}")
 
     return False
+
   
 def backtest(ticker, model, initial_balance=1_000_000, fee=0.0005):
     """과거 데이터로 백테스트 실행"""
