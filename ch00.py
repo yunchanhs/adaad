@@ -311,67 +311,73 @@ def should_sell(ticker, current_price, ml_signal):
     entry_price = entry_prices[ticker]
     highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
 
-    change_ratio = (current_price - entry_price) / entry_price
-    peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]
+    change_ratio = (current_price - entry_price) / entry_price  # 총 수익률
+    peak_drop = (highest_prices[ticker] - current_price) / highest_prices[ticker]  # 최고점 대비 하락률
 
-    # 🚨 손절 조건 (-5% 손실)
-    if change_ratio < STOP_LOSS_THRESHOLD:
-        if ml_signal < 0.5:
-            print(f"[{ticker}] 🚨 손절 조건! 손실률: {change_ratio*100:.2f}% + AI 약함 → 매도")
-            return True
-        else:
-            print(f"[{ticker}] ⚠️ 손실이지만 AI 강함 → 반등 기대, 보유")
-            return False
-
-    # ✅ 강한 익절 조건 (15% 이상 수익)
-    if change_ratio > 0.15:
-        if ml_signal < 0.5:
-            print(f"[{ticker}] ✅ 강한 익절 + AI 약함 → 매도")
-            return True
-        else:
-            print(f"[{ticker}] ✅ 강한 익절 + AI 강함 → 보유 유지")
-            return False
-
-    # 📉 트레일링 스탑 조건
-    if peak_drop > 0.025 and ml_signal < 0.5:
-        print(f"[{ticker}] 📉 트레일링 스탑! 최고점 대비 하락률: {peak_drop*100:.2f}% + AI 약함 → 매도")
+    # 🚨 1. 손절 조건 (절대 -5% 손실)
+    if change_ratio < -0.05:
+        print(f"[{ticker}] 🚨 -5% 손절 발동")
         return True
 
-    # 📈 추세 보유 조건
-    if change_ratio > 0.1 and ml_signal >= 0.6:
-        print(f"[{ticker}] 📈 수익 + AI 강함 → 보유 유지")
-        return False
+    # ✅ 2. 다단계 익절 조건
+    if change_ratio >= 0.2:
+        print(f"[{ticker}] 🎯 20% 이상 수익 → 무조건 익절")
+        return True
+    elif change_ratio >= 0.15:
+        if ml_signal < 0.6:
+            print(f"[{ticker}] ✅ 15% 수익 + AI 약함 → 익절")
+            return True
+        else:
+            print(f"[{ticker}] ✅ 15% 수익 + AI 강함 → 보유")
+            return False
+    elif change_ratio >= 0.10:
+        if ml_signal < 0.5:
+            print(f"[{ticker}] ✅ 10% 수익 + AI 약함 → 익절")
+            return True
 
-    # 🔍 RSI & MACD 분리 분석
+    # 📉 3. 트레일링 스탑 (고점 대비 2.5% 하락 + AI 약함)
+    if peak_drop > 0.025 and ml_signal < 0.5:
+        print(f"[{ticker}] 📉 트레일링 스탑 발동! 고점 대비 하락률: {peak_drop*100:.2f}%")
+        return True
+
+    # 📈 4. 추세 유지 조건 (수익 + AI 강함 + MACD 상승)
+    if change_ratio > 0.05 and ml_signal > 0.6:
+        try:
+            df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)
+            df = get_macd_from_df(df)
+            macd = df['macd'].iloc[-1]
+            signal = df['signal'].iloc[-1]
+            if macd > signal:
+                print(f"[{ticker}] 📈 추세 지속 (MACD 상승) → 보유")
+                return False
+        except Exception as e:
+            print(f"[{ticker}] MACD 계산 오류: {e}")
+
+    # 🧪 5. 보조 지표: RSI 과매수 + AI 약함 → 매도 고려
     try:
         df = pyupbit.get_ohlcv(ticker, interval="minute5", count=200)
         df = get_macd_from_df(df)
         df = get_rsi_from_df(df)
 
+        rsi = df['rsi'].iloc[-1]
         macd = df['macd'].iloc[-1]
         signal = df['signal'].iloc[-1]
-        rsi = df['rsi'].iloc[-1]
 
-        # MACD 데드크로스
-        if macd < signal and change_ratio > 0.08:
-            print(f"[{ticker}] 📉 MACD 데드크로스 발생")
+        if rsi > 80:
+            print(f"[{ticker}] RSI 과매수 상태 (rsi={rsi:.1f})")
             if ml_signal < 0.5:
-                print(f"[{ticker}] MACD 약세 + AI 약함 → 매도")
+                print(f"[{ticker}] RSI 경고 + AI 약함 → 매도")
                 return True
 
-        # RSI 과매수
-        if rsi > 80 and change_ratio > 0.08:
-            print(f"[{ticker}] 🔴 RSI 과매수 상태")
-            if ml_signal < 0.5:
-                print(f"[{ticker}] RSI 과매수 + AI 약함 → 매도")
-                return True
+        if macd < signal and ml_signal < 0.5:
+            print(f"[{ticker}] MACD 데드크로스 + AI 약함 → 매도")
+            return True
 
     except Exception as e:
-        print(f"[{ticker}] 지표 계산 중 에러: {e}")
+        print(f"[{ticker}] RSI/MACD 보조 지표 오류: {e}")
 
     return False
 
-  
 def backtest(ticker, model, initial_balance=1_000_000, fee=0.0005):
     """과거 데이터로 백테스트 실행"""
     data = get_features(ticker)
