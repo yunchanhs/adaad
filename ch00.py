@@ -580,24 +580,34 @@ if __name__ == "__main__":
                     if ticker in entry_prices:
                         entry_price = entry_prices[ticker]
                         highest_prices[ticker] = max(highest_prices.get(ticker, entry_price), current_price)
-
+                        
                         if should_sell(ticker, current_price, ml_signal):
-                            if ml_signal < ML_SELL_THRESHOLD:
-                                try:
-                                    coin = ticker.split('-')[1]
-                                    coin_balance = get_balance(coin)
-                                except Exception as e:
-                                    print(f"[{ticker}] 잔고 확인 에러: {e}")
-                                    continue
-
-                                if coin_balance > 0:
+                            change_ratio = (current_price - entry_price) / entry_price  # 총 수익률
+                            try:
+                                coin = ticker.split('-')[1]
+                                coin_balance = get_balance(coin)
+                            except Exception as e:
+                                print(f"[{ticker}] 잔고 확인 에러: {e}")
+                                continue
+                                
+                            if coin_balance > 0:
+                                # 손절 조건: -5% 손실일 경우 무조건 매도
+                                if change_ratio < -0.05:
+                                    print(f"[{ticker}] 🚨 -5% 손절 조건 → 강제 매도")
                                     sell_crypto_currency(ticker, coin_balance)
-                                    del entry_prices[ticker]
-                                    del highest_prices[ticker]
-                                    recent_trades[ticker] = now
-                                    print(f"[{ticker}] 트레일링 스탑 or 손절 매도 완료.")
-                            else:
-                                print(f"[{ticker}] AI 신호 강함 → 매도 보류")
+                                    
+                                # 나머지 조건에서는 AI 신호가 낮으면 매도, 높으면 보류
+                                elif ml_signal < ML_SELL_THRESHOLD:
+                                    print(f"[{ticker}] ✅ 기타 매도 조건 + AI 약함 → 매도")
+                                    sell_crypto_currency(ticker, coin_balance)
+                                else:
+                                    print(f"[{ticker}] ⚠️ AI 신호 강함 → 매도 보류")
+                                    continue  # 매도 보류 시 후처리 생략
+
+                                # 매도 후 공통 정리
+                                del entry_prices[ticker]
+                                del highest_prices[ticker]
+                                recent_trades[ticker] = now
 
                 except Exception as e:
                     print(f"[{ticker}] 처리 중 에러 발생: {e}")
